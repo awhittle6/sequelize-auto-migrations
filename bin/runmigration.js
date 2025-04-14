@@ -30,87 +30,99 @@ let {
   modelsDir
 } = pathConfig(options);
 
-if (!fs.existsSync(modelsDir)) {
-  console.log("Can't find models directory. Use `sequelize init` to create it")
-  return
-}
-
-if (!fs.existsSync(migrationsDir)) {
+if (Array.isArray(modelsDir) && Array.isArray(migrationsDir)) {
+  for (let i = 0; i < modelsDir.length; i++) {
+    handleDirs(modelsDir[i], migrationsDir[i])
+  }
+} else if (modelsDir && migrationsDir) {
+  handleDirs(modelsDir, migrationsDir)
+} else {
   console.log("Can't find migrations directory. Use `sequelize init` to create it")
-  return
 }
 
-if (options.help) {
-  console.log("Simple sequelize migration execution tool\n\nUsage:");
-  optionDefinitions.forEach((option) => {
-    let alias = (option.alias) ? ` (-${option.alias})` : '\t';
-    console.log(`\t --${option.name}${alias} \t${option.description}`);
-  });
-  process.exit(0);
-}
-
-const sequelize = require(modelsDir).sequelize;
-
-const queryInterface = sequelize.getQueryInterface();
-
-// execute all migration from
-let fromRevision = options.rev;
-let fromPos = parseInt(options.pos);
-let stop = options.one;
-
-let migrationFiles = fs.readdirSync(migrationsDir)
-  // filter JS files
-  .filter((file) => {
-    return (file.indexOf('.') !== 0) && (file.slice(-3) === '.js');
-  })
-  // sort by revision
-  .sort((a, b) => {
-    let revA = parseInt(path.basename(a).split('-', 2)[0]),
-      revB = parseInt(path.basename(b).split('-', 2)[0]);
-    if (revA < revB) return -1;
-    if (revA > revB) return 1;
-    return 0;
-  })
-// remove all migrations before fromRevision
-// .filter((file) => {
-//   let rev = parseInt(path.basename(file).split('-', 2)[0]);
-//   return (rev >= fromRevision);
-// });
-
-
-if (options.list)
-  process.exit(0);
-
-async function executeSql(queryInterface, sql) {
-  return queryInterface.sequelize.query(
-    sql, {
-    type: queryInterface.sequelize.QueryTypes.SELECT
-  });
-}
-
-(async () => {
-  let createIfNot = await executeSql(queryInterface,
-    'CREATE TABLE IF NOT EXISTS "SequelizeMeta" (name varchar UNIQUE)'
-    );
-  let res = await executeSql(queryInterface, 'select * from "SequelizeMeta"');
-  let ranMigrations = res.map(r => r.name);
-  migrationFiles = migrationFiles.filter(mf => {
-    return (!ranMigrations.includes(mf));
-  })
-  migrationFiles.forEach((file) => {
-    console.log("\t" + file);
-  });
-
-  for (let file of migrationFiles) {
-    await migrate.executeMigration(queryInterface, path.join(migrationsDir, file), fromPos);
-    await executeSql(queryInterface, `INSERT INTO "SequelizeMeta" ("name") VALUES ('${file}')`);
-    fromPos = 0;
+function handleDirs(modelsDir, migrationsDir) {
+    if (!fs.existsSync(modelsDir)) {
+    console.log("Can't find models directory. Use `sequelize init` to create it")
+    return
   }
 
-  if (migrationFiles.length == 0) {
-    console.log('No new migration files found');
-  } else {
-    console.log('Completed running migrations');
+  if (!fs.existsSync(migrationsDir)) {
+    console.log("Can't find migrations directory. Use `sequelize init` to create it")
+    return
   }
-  process.exit(0);
-})();
+
+  if (options.help) {
+    console.log("Simple sequelize migration execution tool\n\nUsage:");
+    optionDefinitions.forEach((option) => {
+      let alias = (option.alias) ? ` (-${option.alias})` : '\t';
+      console.log(`\t --${option.name}${alias} \t${option.description}`);
+    });
+    process.exit(0);
+  }
+
+  const sequelize = require(modelsDir).sequelize;
+
+  const queryInterface = sequelize.getQueryInterface();
+
+  // execute all migration from
+  let fromRevision = options.rev;
+  let fromPos = parseInt(options.pos);
+  let stop = options.one;
+
+  let migrationFiles = fs.readdirSync(migrationsDir)
+    // filter JS files
+    .filter((file) => {
+      return (file.indexOf('.') !== 0) && (file.slice(-3) === '.js');
+    })
+    // sort by revision
+    .sort((a, b) => {
+      let revA = parseInt(path.basename(a).split('-', 2)[0]),
+        revB = parseInt(path.basename(b).split('-', 2)[0]);
+      if (revA < revB) return -1;
+      if (revA > revB) return 1;
+      return 0;
+    })
+  // remove all migrations before fromRevision
+  // .filter((file) => {
+  //   let rev = parseInt(path.basename(file).split('-', 2)[0]);
+  //   return (rev >= fromRevision);
+  // });
+
+
+  if (options.list)
+    process.exit(0);
+
+  async function executeSql(queryInterface, sql) {
+    return queryInterface.sequelize.query(
+      sql, {
+      type: queryInterface.sequelize.QueryTypes.SELECT
+    });
+  }
+
+  (async () => {
+    let createIfNot = await executeSql(queryInterface,
+      'CREATE TABLE IF NOT EXISTS "SequelizeMeta" (name varchar UNIQUE)'
+      );
+    let res = await executeSql(queryInterface, 'select * from "SequelizeMeta"');
+    let ranMigrations = res.map(r => r.name);
+    migrationFiles = migrationFiles.filter(mf => {
+      return (!ranMigrations.includes(mf));
+    })
+    migrationFiles.forEach((file) => {
+      console.log("\t" + file);
+    });
+
+    for (let file of migrationFiles) {
+      await migrate.executeMigration(queryInterface, path.join(migrationsDir, file), fromPos);
+      await executeSql(queryInterface, `INSERT INTO "SequelizeMeta" ("name") VALUES ('${file}')`);
+      fromPos = 0;
+    }
+
+    if (migrationFiles.length == 0) {
+      console.log('No new migration files found');
+    } else {
+      console.log('Completed running migrations');
+    }
+    process.exit(0);
+  })();
+}
